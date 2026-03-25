@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: jenkins
+      POSTGRES_PASSWORD: jenkins
+      POSTGRES_DB: jenkins_db
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+      
