@@ -39,3 +39,35 @@ async def receive_webhook(payload: WebhookPayload):
     enqueue_job(job.id)
     
     return {"job_id": job.id}
+
+@app.get("/jobs")
+def get_jobs():
+    db = SessionLocal()
+    jobs = db.query(Job).all()
+
+    return [
+        {
+            "id": j.id,
+            "repo": j.repo,
+            "status": j.status,
+            "current_stage": j.current_stage
+        }
+        for j in jobs
+    ]
+
+
+@app.get("/jobs/{job_id}")
+def get_job(job_id: str):
+    db = SessionLocal()
+    job = db.query(Job).filter(Job.id == job_id).first()
+
+    if not job:
+        return {"error": "Job not found"}
+
+    return {
+        "id": job.id,
+        "repo": job.repo,
+        "status": job.status,
+        "current_stage": job.current_stage,
+        "stages": job.stages
+    }

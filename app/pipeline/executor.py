@@ -9,33 +9,39 @@ def run_pipeline():
     print("Pipeline executor started...")
 
     while True:
-        job_id = r.brpop("job_queue", timeout=5)
+        result = r.brpop("job_queue", timeout=5)
 
-        if job_id:
+        if result:
+            _, job_id = result  # FIX: brpop returns (key, value)
+
             db = SessionLocal()
             job = db.query(Job).filter(Job.id == job_id).first()
 
             if not job:
                 continue
 
-            print(f"\n🚀 Running job: {job_id}")
+            print(f"\nRunning job: {job_id}")
 
             job.status = "running"
+
+            # Define pipeline stages
+            stages = ["checkout", "build", "test"]
+
+            job.stages = stages
             db.commit()
 
-            # Simulated pipeline stages
-            print("📦 Cloning repo...")
-            time.sleep(2)
+            for stage in stages:
+                job.current_stage = stage
+                db.commit()
 
-            print("🔨 Building...")
-            time.sleep(2)
+                print(f"Running stage: {stage}")
 
-            print("🧪 Testing...")
-            time.sleep(2)
+                time.sleep(2)
 
-            print("✅ Job completed")
+            print("Job completed")
 
             job.status = "completed"
+            job.current_stage = None
             db.commit()
 
         time.sleep(1)

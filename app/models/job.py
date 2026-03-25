@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String # type: ignore
+from sqlalchemy import Column, String, JSON # type: ignore
 from app.db import Base
+
 
 class Job(Base):
     __tablename__ = "jobs"
@@ -9,3 +10,6 @@ class Job(Base):
     branch = Column(String)
     commit_sha = Column(String)
     status = Column(String)
+    
+    current_stage = Column(String, nullable = True)
+    stages = Column(JSON, nullable = True)
