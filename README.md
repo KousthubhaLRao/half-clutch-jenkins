@@ -1,7 +1,9 @@
 # Half Clutch Jenkins (Mini CI/CD)
 
 A simplified Jenkins-like CI/CD system implementing the core “master” functionality: webhook ingestion, job storage, queuing, and execution.
-HI HELLO MY NAME IS KOUSTHUBHA
+
+HELLO HELLO HELLO
+
 ---
 
 ## Tech Stack
