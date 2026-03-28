@@ -22,5 +22,12 @@ pipeline {
                 echo 'Pushing to Docker Hub...'
             }
         }
+        stage('be happy')
+        {
+            steps
+            {
+                echo 'ohohoho'
+            }
+        }
     }
 }
