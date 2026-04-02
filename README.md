@@ -1,7 +1,7 @@
 # Half Clutch Jenkins (Mini CI/CD)
 
 
-GURARARARARA
+GURARARARARA is a one piece laugh
 
 
 A simplified Jenkins-like CI/CD system implementing the core “master” functionality: webhook ingestion, job storage, queuing, and execution.
