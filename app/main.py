@@ -38,10 +38,23 @@ class WebhookPayload(BaseModel):
 
 @app.post("/webhook")
 async def receive_webhook(payload: WebhookPayload, db: Session = Depends(get_db)):
-    # 1. Detect Language via GitHub API
-    lang_resp = requests.get(f"https://api.github.com/repos/{payload.repository.full_name}/languages")
-    languages = lang_resp.json() if lang_resp.status_code == 200 else {"Python": 100}
-    primary_lang = max(languages, key=languages.get) if languages else "Python"
+    # 1. Detect Language via GitHub API with Authentication
+    # PASTE YOUR TOKEN BELOW
+    headers = {"Authorization": "token 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"}
+    
+    url = f"https://api.github.com/repos/{payload.repository.full_name}/languages"
+    lang_resp = requests.get(url, headers=headers)
+    
+    # If successful (200), use the detected languages. 
+    # If failed (Rate limited/403), use the fallback.
+    if lang_resp.status_code == 200:
+        languages = lang_resp.json()
+        primary_lang = max(languages, key=languages.get) if languages else "Generic"
+    else:
+        print(f"⚠️ API Error {lang_resp.status_code}: Falling back to Python")
+        primary_lang = "Python"
+
+    # ... rest of your job creation code remains the same
 
     # 2. Create the Job with ALL required fields
     job = Job(
