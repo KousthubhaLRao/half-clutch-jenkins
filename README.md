@@ -1,13 +1,12 @@
-# Half Clutch Jenkins (Mini CI/CD)
+# Half Clutch Jenkins ( CI/CD)
 
-
-GURARARARARA is a one piece laugh
+YOHOHOHO is a one piece laugh
 
 
 A simplified Jenkins-like CI/CD system implementing the core “master” functionality: webhook ingestion, job storage, queuing, and execution.
 
 hehe cotton pickers
-
+hello
 ---
 
 ## Tech Stack
@@ -70,7 +69,7 @@ python -m uvicorn app.main:app --reload
 5. Run executor (in a new terminal):
 
 ```
-python -m app.pipeline.executor
+python -m app.pipeline.worker_manager
 ```
 
 ---
@@ -116,4 +115,3 @@ SELECT * FROM jobs;
 * Jobs move through: `queued → running → completed`
 * Pipeline execution is simulated
 * Only Jenkins master functionality is implemented (no workers)
-\n# New Harvest Test

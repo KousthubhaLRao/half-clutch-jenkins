@@ -7,49 +7,58 @@ from app.jobs.queue import r
 from app.db import SessionLocal
 from app.models.job import Job
 
-# 1. The Expert Worker (Harvester) Class
+# 1. The Expert Harvester Class
 class Harvester:
     def __init__(self, name, specialty):
         self.name = name
         self.specialty = specialty
         self.busy = False
 
-    def process_job(self, job_id):
+    def process_job(self, job_id, priority_score):
         self.busy = True
         db = SessionLocal()
-        job = db.query(Job).filter(Job.id == job_id).first()
+        
+        # Ensure job_id is a clean string (Fixes byte-string issues)
+        clean_id = job_id.decode('utf-8') if isinstance(job_id, bytes) else job_id
+        
+        job = db.query(Job).filter(Job.id == clean_id).first()
         
         if not job:
+            print(f"[{self.name}] ❌ Error: Job {clean_id} not found in DB.")
             self.busy = False
             db.close()
             return
 
-        print(f"[{self.name}] Started harvesting {job.repo} (Language: {job.language})")
+        priority_label = {3: "HIGH (P3)", 2: "MID (P2)", 1: "LOW (P1)"}.get(priority_score, "LOW")
+        print(f"[{self.name}] 🚜 Harvesting {priority_label} job: {job.repo} on {job.branch}")
+        
         job.status = "running"
-        job.worker_id = self.name #
+        job.worker_id = self.name
         db.commit()
 
-        # Fetch stages directly from Jenkinsfile using Regex
+        # Parsing Jenkinsfile
         stages = self.fetch_jenkinsfile_stages(job.repo, job.branch)
-        job.stages = {s: "pending" for s in stages} #
+        job.stages = {s: "pending" for s in stages}
         db.commit()
 
         for stage in stages:
-            print(f"[{self.name}] Running stage: {stage}")
-            job.current_stage = stage #
+            print(f"[{self.name}] Stage: {stage}...")
+            job.current_stage = stage
             
-            # Update stage status to running
-            job.stages = {**job.stages, stage: "running"}
+            # Atomic update of the JSONB field
+            current_stages = dict(job.stages)
+            current_stages[stage] = "running"
+            job.stages = current_stages
             db.commit()
             
-            # Simulate real-world behavior with randomness
-            time.sleep(random.uniform(2, 5)) 
+            # Simulate build time
+            time.sleep(random.uniform(3, 7)) 
             
-            # Update stage status to completed
-            job.stages = {**job.stages, stage: "completed"}
+            current_stages[stage] = "completed"
+            job.stages = current_stages
             db.commit()
 
-        print(f"[{self.name}] Job {job_id} completed successfully.")
+        print(f"[{self.name}] ✅ Job {clean_id[:8]} Baled & Ready.")
         job.status = "completed"
         job.current_stage = None
         db.commit()
@@ -57,24 +66,21 @@ class Harvester:
         self.busy = False
 
     def fetch_jenkinsfile_stages(self, repo, branch):
-        # Clean up branch name for the URL
-        branch = branch.replace("refs/heads/", "")
-        url = f"https://raw.githubusercontent.com/{repo}/{branch}/Jenkinsfile"
+        # Clean branch name
+        branch_name = branch.split('/')[-1]
+        url = f"https://raw.githubusercontent.com/{repo}/{branch_name}/Jenkinsfile"
         
         try:
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
-                # Extract stage names using the regex for Groovy Jenkinsfiles
                 stages = re.findall(r"stage\(['\"](.+?)['\"]\)", response.text)
-                if stages:
-                    return stages
-        except Exception as e:
-            print(f"[{self.name}] Could not fetch Jenkinsfile: {e}")
+                if stages: return stages
+        except Exception:
+            pass
         
-        # Fallback if no Jenkinsfile is found or parsing fails
-        return ["checkout", "build", "test"]
+        return ["Fetch", "Build", "Test", "Deploy"]
 
-# 2. Initialize the Crew (5 Workers)
+# 2. The Worker Crew
 crew = [
     Harvester("Python-Harvester-1", "Python"),
     Harvester("Python-Harvester-2", "Python"),
@@ -84,18 +90,26 @@ crew = [
 ]
 
 def run_manager():
-    print("🌾 Work Manager is patrolling the fields...")
+    print("\n" + "="*50)
+    print("🌾 WORK MANAGER STARTING...")
+    print("DEMO MODE: Pausing for 5 seconds to let the queue fill...")
+    print("="*50 + "\n")
     
+    # This delay allows you to "clog" the queue before workers start picking
+    time.sleep(5) 
+    
+    print("🚜 Harvesters are entering the fields now!\n")
+
     while True:
-        # Priority Scheduling: Pick highest priority job from Redis Sorted Set
+        # ZPOPMAX ensures we get the HIGHEST priority (P3 > P2 > P1)
         job_data = r.zpopmax("job_priority_queue")
         
         if job_data:
-            # Redis zpopmax returns a list of tuples: [(member, score)]
-            job_id, priority = job_data[0]
+            job_id, priority = job_data[0] # job_id is bytes, priority is float
             
             db = SessionLocal()
-            job = db.query(Job).filter(Job.id == job_id).first()
+            clean_id = job_id.decode('utf-8') if isinstance(job_id, bytes) else job_id
+            job = db.query(Job).filter(Job.id == clean_id).first()
             
             if not job:
                 db.close()
@@ -103,28 +117,28 @@ def run_manager():
             
             assigned = False
             
-            # Step 1: Try to find a specialist for the language
+            # Try specialists first
             for worker in crew:
                 if not worker.busy and worker.specialty == job.language:
-                    threading.Thread(target=worker.process_job, args=(job_id,)).start()
+                    threading.Thread(target=worker.process_job, args=(job_id, priority)).start()
                     assigned = True
                     break
             
-            # Step 2: Fallback to the Generic worker if no specialist is free
+            # Fallback to General Laborer
             if not assigned:
                 for worker in crew:
                     if not worker.busy and worker.specialty == "Generic":
-                        threading.Thread(target=worker.process_job, args=(job_id,)).start()
+                        threading.Thread(target=worker.process_job, args=(job_id, priority)).start()
                         assigned = True
                         break
             
-            # Step 3: If everyone is busy, put the job back in the queue
+            # If no worker is free, put it back
             if not assigned:
                 r.zadd("job_priority_queue", {job_id: priority})
             
             db.close()
             
-        time.sleep(1)
+        time.sleep(0.5) # Fast polling for responsiveness
 
 if __name__ == "__main__":
     run_manager()
