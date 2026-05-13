@@ -53,7 +53,10 @@ def calculate_priority(ref: str) -> int:
 @app.post("/webhook")
 async def receive_webhook(payload: WebhookPayload, db: Session = Depends(get_db)):
     # 0. Deduplication Check: Don't process the same commit twice
-    existing_job = db.query(Job).filter(Job.commit_sha == payload.after).first()
+    existing_job = db.query(Job).filter(
+    Job.commit_sha == payload.after,
+    Job.status.in_(["queued", "running"])
+).first()
     if existing_job:
         print(f"♻️ Skipping duplicate commit: {payload.after[:7]}")
         return {"status": "skipped", "reason": "duplicate commit"}
